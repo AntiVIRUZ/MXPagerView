@@ -1,6 +1,6 @@
 // MXPagerViewController.m
 //
-// Copyright (c) 2016 Maxime Epain
+// Copyright (c) 2015 Maxime Epain
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,11 +22,12 @@
 
 #import "MXPagerViewController.h"
 
-@interface MXPagerViewController () <MXPageSegueSource>
-@property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIViewController *> *pageViewControllers;
+@interface MXPagerViewController () <MXPageSegueDelegate>
+
 @end
 
 @implementation MXPagerViewController {
+    UIViewController *_pageViewController;
     NSInteger _pageIndex;
 }
 
@@ -47,51 +48,51 @@
     return _pagerView;
 }
 
-- (NSMutableDictionary<NSNumber *,UIViewController *> *)pageViewControllers {
-    if (!_pageViewControllers) {
-        _pageViewControllers = [NSMutableDictionary dictionary];
-    }
-    return _pageViewControllers;
-}
-
 #pragma mark <MXPagerViewControllerDataSource>
 
-- (NSInteger)numberOfPagesInPagerView:(nonnull MXPagerView *)pagerView {
+- (NSInteger) numberOfPagesInPagerView:(nonnull MXPagerView *)pagerView {
     NSArray *segues = [self valueForKey:@"storyboardSegueTemplates"] ;
     return segues.count;
 }
 
 - (UIView *)pagerView:(MXPagerView *)pagerView viewForPageAtIndex:(NSInteger)index {
-    return [self pagerView:pagerView viewControllerForPageAtIndex:index].view;
+    
+    UIViewController *viewController = [self pagerView:pagerView viewControllerForPageAtIndex:index];
+    
+    if (viewController) {
+        [self addChildViewController:viewController];
+        [viewController didMoveToParentViewController:self];
+        
+        return viewController.view;
+    }
+    return nil;
 }
 
 - (UIViewController *)pagerView:(MXPagerView *)pagerView viewControllerForPageAtIndex:(NSInteger)index {
-    UIViewController *pageViewController = self.pageViewControllers[@(index)];
-    
-    if (!pageViewController && self.storyboard) {
+    if (self.storyboard) {
         @try {
-            _pageIndex = index;
             NSString *identifier = [self pagerView:pagerView segueIdentifierForPageAtIndex:index];
+            _pageIndex = index;
             [self performSegueWithIdentifier:identifier sender:nil];
-            return self.pageViewControllers[@(index)];
+            return _pageViewController;
         }
         @catch(NSException *exception) {}
     }
-    return pageViewController;
+    return nil;
 }
 
 - (NSString *)pagerView:(MXPagerView *)pagerView segueIdentifierForPageAtIndex:(NSInteger)index {
     return [NSString stringWithFormat:MXSeguePageIdentifierFormat, (long)index];
 }
 
-#pragma mark <MXPageSegueSource>
+#pragma mark <MXPageSegueDelegate>
 
--(NSInteger)pageIndex {
+- (NSInteger)pageIndex {
     return _pageIndex;
 }
 
-- (void)setPageViewController:(__kindof UIViewController *)pageViewController atIndex:(NSInteger)index {
-    self.pageViewControllers[@(index)] = pageViewController;
+- (void)setPageViewController:(UIViewController*)pageViewController{
+    _pageViewController = pageViewController;
 }
 
 @end
@@ -105,7 +106,7 @@ NSString * const MXSeguePageIdentifierFormat = @"mx_page_%ld";
 @dynamic sourceViewController;
 @synthesize pageIndex = _pageIndex;
 
-- (instancetype)initWithIdentifier:(nullable NSString *)identifier source:(UIViewController <MXPageSegueSource>*)source destination:(UIViewController *)destination {
+- (instancetype)initWithIdentifier:(nullable NSString *)identifier source:(UIViewController <MXPageSegueDelegate>*)source destination:(UIViewController *)destination {
     if (self = [super initWithIdentifier:identifier source:source destination:destination]) {
         
         if ([source respondsToSelector:@selector(pageIndex)]) {
@@ -116,9 +117,9 @@ NSString * const MXSeguePageIdentifierFormat = @"mx_page_%ld";
 }
 
 - (void)perform {
-    [self.sourceViewController willMoveToParentViewController:self.destinationViewController];
-    [self.sourceViewController setPageViewController:self.destinationViewController atIndex:self.pageIndex];
-    [self.sourceViewController didMoveToParentViewController:self.destinationViewController];
+    if ([self.sourceViewController respondsToSelector:@selector(setPageViewController:)]) {
+        self.sourceViewController.pageViewController = self.destinationViewController;
+    }
 }
 
 @end
